@@ -1,27 +1,36 @@
-pipeline {
+pipeline{
     agent any
-
-    stages {
-        stage('Clone Repository') {
+    stages{
+        stage('Checkout git') {
             steps {
-                checkout([$class: 'GitSCM', 
-                    branches: [[name: '*/main']], 
-                    userRemoteConfigs: [[url: 'https://github.com/ShMrunal/medicure-app-selenium-test.git']]
-                ])
-            }
-        }
-
-        stage('Build with Maven') {
-            steps {
-                sh 'mvn clean package assembly:single'
+              git 'https://github.com/ShMrunal/finance-me-app.git'
             }
         }
         
-        stage('run test script'){
+        stage ('Build & JUnit Test') {
             steps {
-            sh 'java -jar /var/lib/jenkins/workspace/medicure-app-selenium-test/target/medicure-application-0.0.1-SNAPSHOT-jar-with-dependencies.jar'
+                sh 'mvn clean package' 
             }
-                
+        }
+        
+        stage("Build Docker Image") {
+            steps {
+                echo "Building the image"
+                catchError(buildResult: 'UNSTABLE') {
+                    sh "docker build -t ${env.dockerHubUser}/finance-me-app:latest ."
+                }
+            }
+        }
+        
+        stage("Push To Docker Hub") {
+            steps {
+                echo "pushing to docker hub"
+                withCredentials([usernamePassword(credentialsId:"dockerHub",passwordVariable:"dockerHubPass",usernameVariable:"dockerHubUser")]){
+                   sh "docker tag finance-me-app ${env.dockerHubUser}/finance-me-app:latest"
+                   sh "docker login -u ${env.dockerHubUser} -p ${env.dockerHubPass}"
+                   sh "docker push ${env.dockerHubUser}/finance-me-app:latest"
+                }
+            }
         }
     }
 }
